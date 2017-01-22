@@ -1,0 +1,8 @@
+---
+# This playbook setup test environment with docker and nginx
+
+- name: apply common configuration to all nodes
+  hosts: all
+
+  roles:
+    - common

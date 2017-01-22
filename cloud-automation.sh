@@ -5,18 +5,39 @@ RED_TEXT="\e[31m"
 GREEN_TEXT="\e[92m"
 RESET_TEXT="\e[0m"
 
+DEBUG=false
+
+function execute_command {
+
+    if [ "$DEBUG" = true ]; then
+	$@
+    else
+	$@ > /dev/null
+    fi
+
+    RET_CODE=$?
+    if [ "$RET_CODE" -ne 0 ]; then
+	echo -n -e "$RED_TEXT"
+	echo "Following command returned with value $RET_CODE"
+	echo ""
+	echo "$@"
+	echo -n -e "$RESET_TEXT"
+	exit $RET_CODE
+    fi
+}
 
 function install_terraform {
     echo -n -e "$RED_TEXT"
     echo "Terraform binary not found, will install terraform in current directory"
     echo -n -e "$RESET_TEXT"
 
-    wget $TERRAFORM_ZIP -O terraform_amd64.zip &&\
-	unzip terraform_amd64.zip &&\
-	rm terraform_amd64.zip &&\
-	echo -n -e "$GREEN_TEXT" &&\
-    	echo "Terraform installation successful" &&\
-	echo -n -e "$RESET_TEXT"
+    execute_command wget $TERRAFORM_ZIP -O terraform_amd64.zip
+    execute command unzip terraform_amd64.zip
+    execute_command rm terraform_amd64.zip
+
+    echo -n -e "$GREEN_TEXT"
+    echo "Terraform installation successful"
+    echo -n -e "$RESET_TEXT"
 }
 
 function install_ansible {
@@ -24,13 +45,14 @@ function install_ansible {
     echo "Ansible not found, will install now install ansible"
     echo -n -e "$RESET_TEXT"
 
-    sudo apt-get -y install software-properties-common
-    sudo apt-add-repository -y ppa:ansible/ansible
-    sudo apt-get -y update
-    sudo apt-get -y install ansible &&\
-	echo -n -e "$GREEN_TEXT" &&\
-    	echo "Ansible installation successful" &&\
-	echo -n -e "$RESET_TEXT"
+    execute_command sudo apt-get -y install software-properties-common
+    execute_command sudo apt-add-repository -y ppa:ansible/ansible
+    execute_command sudo apt-get -y update
+    execute_command sudo apt-get -y install ansible
+
+    echo -n -e "$GREEN_TEXT"
+    echo "Ansible installation successful"
+    echo -n -e "$RESET_TEXT"
 }
 
 function show_help {
@@ -58,7 +80,7 @@ fi
 # Check if ansible is installed
 type ansible >/dev/null 2>&1 || install_ansible
 
-
+# Put the arguments in varaibles
 APP="$1"
 ENV="$2"
 NUM_SERV="$3"
@@ -70,11 +92,12 @@ if [ ! -f "terraform" ];
 then
     install_terraform
 fi
-./terraform apply -var "web_instances=$NUM_SERV"
+execute_command ./terraform apply -var "web_instances=$NUM_SERV" -var "instance_size=$SERV_SIZE"
 
 WEB_IPS=$(./terraform output | grep webs | sed 's/webs = //')
-DB_HOST=$(./terraform output | grep db | sed 's/db = //')
+DB_HOST=$(./terraform output | grep db_priv | sed 's/db_priv = //')
 WEB_ADDRESS=$(./terraform output | grep address | sed 's/address = //')
+DB_PUB=$(./terraform output | grep db_pub | sed 's/db_pub = //')
 
 cd ..
 # End of the terraform part
@@ -82,7 +105,10 @@ cd ..
 # Lets start with configure our servers with ansible
 cd ansible
 export ANSIBLE_HOST_KEY_CHECKING=False
-ansible-playbook -i "$WEB_IPS," -u ubuntu --extra-vars "wordpress_db_host=$DB_HOST" site.yml
+# Configure the database host
+execute_command ansible-playbook -i "$DB_PUB," -u ubuntu db.yml
+# Configure the web hosts
+execute_command ansible-playbook -i "$WEB_IPS," -u ubuntu  --extra-vars "wordpress_version=$APP" --extra-vars "wordpress_db_host=$DB_HOST" web.yml
 cd ..
 # Done with the ansible part
 

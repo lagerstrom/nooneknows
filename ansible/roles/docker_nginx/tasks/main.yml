@@ -1,0 +1,16 @@
+---
+
+- name: Removes nginx container
+  docker_container:
+    name: my_nginx
+    image: jasonwyatt/nginx-loadbalancer
+    state: absent
+
+- name: Create nginx container
+  docker_container:
+    name: my_nginx
+    image: jasonwyatt/nginx-loadbalancer
+    state: started
+    env: "{{ env_dict }}"
+    ports:
+      - "80:80"

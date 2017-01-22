@@ -27,11 +27,19 @@ resource "aws_subnet" "default" {
   map_public_ip_on_launch = true
 }
 
-# A security group for the ELB so it is accessible via the web
-resource "aws_security_group" "elb" {
+# A security group for the LB so it is accessible via the web
+resource "aws_security_group" "lb" {
   name        = "load_balancer_security_group"
   description = "Security group for the load balancer"
   vpc_id      = "${aws_vpc.default.id}"
+
+  # SSH access from anywhere
+  ingress {
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
 
   # HTTP access from anywhere
   ingress {
@@ -84,7 +92,7 @@ resource "aws_security_group" "db" {
 
 # Our default security group to access
 # the instances over SSH and HTTP
-resource "aws_security_group" "default" {
+resource "aws_security_group" "web" {
   name        = "default_security_group"
   description = "This is the default security group"
   vpc_id      = "${aws_vpc.default.id}"
@@ -114,38 +122,6 @@ resource "aws_security_group" "default" {
   }
 }
 
-resource "aws_elb" "web" {
-  name = "load-balancer"
-
-  subnets         = ["${aws_subnet.default.id}"]
-  security_groups = ["${aws_security_group.elb.id}"]
-  instances       = ["${aws_instance.web.*.id}"]
-
-  health_check {
-    healthy_threshold = 2
-    target = "TCP:80"
-    unhealthy_threshold = 10
-    timeout = 4
-    interval = 5
-  }
-
-  listener {
-    instance_port     = 80
-    instance_protocol = "http"
-    lb_port           = 80
-    lb_protocol       = "http"
-  }
-}
-
-
-resource "aws_lb_cookie_stickiness_policy" "sticky_web" {
-  name = "sticky-policy"
-  load_balancer = "${aws_elb.web.id}"
-  lb_port = 80
-  cookie_expiration_period = 600
-}
-
-
 resource "aws_key_pair" "auth" {
   key_name   = "${var.key_name}"
   public_key = "${file(var.public_key_path)}"
@@ -171,7 +147,7 @@ resource "aws_instance" "web" {
   key_name = "${aws_key_pair.auth.id}"
 
   # Our Security group to allow HTTP and SSH access
-  vpc_security_group_ids = ["${aws_security_group.default.id}"]
+  vpc_security_group_ids = ["${aws_security_group.web.id}"]
 
   # We're going to launch into the same subnet as our ELB. In a production
   # environment it's more common to have a separate private subnet for
@@ -223,6 +199,42 @@ resource "aws_instance" "db" {
 
   tags {
     Name = "database_instance"
+  }
+
+  # We run a remote provisioner on the instance after creating it.
+  provisioner "remote-exec" {
+    inline = [
+      "sudo apt-get -y update",
+    ]
+  }
+}
+
+resource "aws_instance" "lb" {
+  # The connection block tells our provisioner how to
+  # communicate with the resource (instance)
+  connection {
+    # The default username for our AMI
+    user = "ubuntu"
+
+    # The connection will use the local SSH agent for authentication.
+  }
+
+  instance_type = "${var.instance_size}"
+
+  # Lookup the correct AMI based on the region
+  # we specified
+  ami = "${lookup(var.aws_amis, var.aws_region)}"
+
+  # The name of our SSH keypair we created above.
+  key_name = "${aws_key_pair.auth.id}"
+
+  # Our Security group to allow HTTP and SSH to everywhere
+  vpc_security_group_ids = ["${aws_security_group.lb.id}"]
+
+  subnet_id = "${aws_subnet.default.id}"
+
+  tags {
+    Name = "loadbalancer_instance"
   }
 
   # We run a remote provisioner on the instance after creating it.

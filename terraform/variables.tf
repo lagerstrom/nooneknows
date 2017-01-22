@@ -6,17 +6,34 @@ connect.
 
 Example: ~/.ssh/terraform.pub
 DESCRIPTION
-default = "/home/envion/.ssh/id_rsa.pub"
+default = "~/.ssh/id_rsa.pub"
 }
 
 variable "key_name" {
   description = "Desired name of AWS key pair"
-  default = "tesla"
+  #default = "tesla"
+  default = "cloud_automation"
 }
 
 variable "aws_region" {
-  description = "AWS region to launch servers."
+  description = "AWS region to launch servers"
   default     = "eu-west-1"
+}
+
+variable "web_instances" {
+  description = "Number of web instances"
+  default = 1
+}
+
+variable "instance_size" {
+  description = "Which instance type to use"
+  default = "t2.micro"
+}
+
+variable "deploy_environment" {
+  description = "Which environment you would like to use"
+  default = "dev"
+
 }
 
 # Ubuntu Precise 14.04 LTS (x64)

@@ -27,12 +27,10 @@ resource "aws_subnet" "default" {
   map_public_ip_on_launch = true
 }
 
-
-
 # A security group for the ELB so it is accessible via the web
 resource "aws_security_group" "elb" {
-  name        = "terraform_example_elb"
-  description = "Used in the terraform"
+  name        = "load_balancer_security_group"
+  description = "Security group for the load balancer"
   vpc_id      = "${aws_vpc.default.id}"
 
   # HTTP access from anywhere
@@ -52,11 +50,35 @@ resource "aws_security_group" "elb" {
   }
 }
 
+# A security group for the database
+resource "aws_security_group" "db" {
+  name        = "security_group_database"
+  description = "Used for the database"
+  vpc_id      = "${aws_vpc.default.id}"
+
+  # MySQL access from the VPC
+  ingress {
+    from_port   = 3306
+    to_port     = 3306
+    protocol    = "tcp"
+    cidr_blocks = ["10.0.0.0/16"]
+  }
+
+  # outbound internet access
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+
+
 # Our default security group to access
 # the instances over SSH and HTTP
 resource "aws_security_group" "default" {
-  name        = "terraform_example"
-  description = "Used in the terraform"
+  name        = "default_security_group"
+  description = "This is the default security group"
   vpc_id      = "${aws_vpc.default.id}"
 
   # SSH access from anywhere
@@ -75,15 +97,6 @@ resource "aws_security_group" "default" {
     cidr_blocks = ["10.0.0.0/16"]
   }
 
-  # MySQL access from the VPC
-  ingress {
-    from_port   = 3306
-    to_port     = 3306
-    protocol    = "tcp"
-    cidr_blocks = ["10.0.0.0/16"]
-  }
-
-
   # outbound internet access
   egress {
     from_port   = 0
@@ -94,11 +107,19 @@ resource "aws_security_group" "default" {
 }
 
 resource "aws_elb" "web" {
-  name = "terraform-example-elb"
+  name = "load-balancer"
 
   subnets         = ["${aws_subnet.default.id}"]
   security_groups = ["${aws_security_group.elb.id}"]
   instances       = ["${aws_instance.web.*.id}"]
+
+  health_check {
+    healthy_threshold = 2
+    target = "TCP:80"
+    unhealthy_threshold = 10
+    timeout = 4
+    interval = 5
+  }
 
   listener {
     instance_port     = 80
@@ -107,6 +128,15 @@ resource "aws_elb" "web" {
     lb_protocol       = "http"
   }
 }
+
+
+resource "aws_lb_cookie_stickiness_policy" "sticky_web" {
+  name = "sticky-policy"
+  load_balancer = "${aws_elb.web.id}"
+  lb_port = 80
+  cookie_expiration_period = 600
+}
+
 
 resource "aws_key_pair" "auth" {
   key_name   = "${var.key_name}"
@@ -123,7 +153,7 @@ resource "aws_instance" "web" {
     # The connection will use the local SSH agent for authentication.
   }
 
-  instance_type = "t2.micro"
+  instance_type = "${var.instance_size}"
 
   # Lookup the correct AMI based on the region
   # we specified
@@ -141,46 +171,16 @@ resource "aws_instance" "web" {
   subnet_id = "${aws_subnet.default.id}"
 
   # How many of this particular instace I would like to have
-  count = 1
+  count = "${var.web_instances}"
 
   tags {
-    Name = "alexander-${count.index}"
+    Name = "web_instance-${count.index}"
   }
 
   # We run a remote provisioner on the instance after creating it.
   provisioner "remote-exec" {
     inline = [
       "sudo apt-get -y update",
-      "sudo apt-get -y install software-properties-common",
-      "sudo apt-add-repository -y ppa:ansible/ansible",
-      "sudo apt-get -y update",
-      "sudo apt-get -y install ansible",
-    ]
-  }
-
-#  # Put test file in /tmp/
-#  provisioner "file" {
-#    content = "db host: ${aws_db_instance.default.address}"
-#    destination = "/tmp/file.log"
-#  }
-
-  # Copies the ansible configuration folder to host
-  provisioner "file" {
-    source = "ansible"
-    destination = "/home/ubuntu/"
-  }
-
-  # Run the ansible configuration
-  provisioner "remote-exec" {
-    inline = [
-      "sudo ansible-playbook -i 'localhost,' -c local /home/ubuntu/ansible/site.yml",
-    ]
-  }
-
-  # Start wordpress with a terraform provision
-  provisioner "remote-exec" {
-    inline = [
-      "sudo docker run -e WORDPRESS_DB_HOST=${aws_db_instance.default.address} -e WORDPRESS_DB_USER='test_user' -e WORDPRESS_DB_PASSWORD='testingpassword' -p 80:80 -d wordpress",
     ]
   }
 }
@@ -192,16 +192,17 @@ resource "aws_subnet" "db1" {
   vpc_id                  = "${aws_vpc.default.id}"
   cidr_block              = "10.0.2.0/24"
   map_public_ip_on_launch = false
-  availability_zone       = "eu-west-1a"
+  #availability_zone       = "eu-west-1a"
+  availability_zone       = "${var.aws_region}a"
 }
-
 
 # Create a subnet to launch our db instances into
 resource "aws_subnet" "db2" {
   vpc_id                  = "${aws_vpc.default.id}"
   cidr_block              = "10.0.3.0/24"
   map_public_ip_on_launch = false
-  availability_zone       = "eu-west-1b"
+  availability_zone       = "${var.aws_region}b"
+  #availability_zone       = "eu-west-1b"
 }
 
 
@@ -213,7 +214,6 @@ resource "aws_db_subnet_group" "default" {
   name = "my_database_subnet_group"
 }
 
-
 resource "aws_db_instance" "default" {
   allocated_storage    = 5
   engine               = "mysql"
@@ -224,8 +224,8 @@ resource "aws_db_instance" "default" {
   password             = "testingpassword"
   multi_az             = false
 
-  # Our Security group to allow HTTP, SSH and MySQL access
-  vpc_security_group_ids = ["${aws_security_group.default.id}"]
+  # Our Security group to allow MySQL access
+  vpc_security_group_ids = ["${aws_security_group.db.id}"]
 
   # Creates the db host in the same VPC as the elb and the EC2 machines
   db_subnet_group_name = "${aws_db_subnet_group.default.id}"

@@ -19,22 +19,31 @@ function install_terraform {
 	echo -n -e "$RESET_TEXT"
 }
 
+function install_ansible {
+    echo -n -e "$RED_TEXT"
+    echo "Ansible not found, will install now install ansible"
+    echo -n -e "$RESET_TEXT"
+
+    sudo apt-get -y install software-properties-common
+    sudo apt-add-repository -y ppa:ansible/ansible
+    sudo apt-get -y update
+    sudo apt-get -y install ansible &&\
+	echo -n -e "$GREEN_TEXT" &&\
+    	echo "Ansible installation successful" &&\
+	echo -n -e "$RESET_TEXT"
+}
+
 function show_help {
     echo "Below you will see the arguments you can use"
     echo "cloud-automation.sh <app> <environment> <num_servers> <server_size>"
     echo "Ex:"
-    echo "cloud-automation.sh hello_world dev 2 t1.micro 1"
-}
-
-function install_ansible {
-    echo "You need to install ansible"
-    exit 1
+    echo "cloud-automation.sh hello_world dev 2 t2.micro"
 }
 
 # Check if they just want to destroy the test env
-if [ "$1" == "destroy" ]
+if [ "$1" == "destroy" ]; then
    cd terraform
-   ./terraform apply
+   ./terraform destroy
    exit
 fi
 
@@ -51,7 +60,7 @@ type ansible >/dev/null 2>&1 || install_ansible
 
 
 APP="$1"
-AUTO_ENV="$2"
+ENV="$2"
 NUM_SERV="$3"
 SERV_SIZE="$4"
 

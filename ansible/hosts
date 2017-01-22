@@ -1,2 +1,0 @@
-[all]
-54.171.173.81 ansible_connection=ssh ansible_user=ubuntu

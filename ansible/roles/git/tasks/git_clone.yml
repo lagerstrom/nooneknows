@@ -1,0 +1,12 @@
+---
+
+- git:
+    repo: https://github.com/WordPress/WordPress
+    dest: /home/ubuntu/wp
+    version: master
+- name: Make my directory tree readable
+  file:
+    path: /home/ubuntu/wp
+    owner: 33
+    group: 33
+    recurse: yes

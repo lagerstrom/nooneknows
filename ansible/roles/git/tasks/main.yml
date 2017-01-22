@@ -1,0 +1,3 @@
+---
+- include: git_install.yml
+- include: git_clone.yml

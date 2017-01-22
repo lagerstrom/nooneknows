@@ -3,7 +3,7 @@
 - git:
     repo: https://github.com/WordPress/WordPress
     dest: /home/ubuntu/wp
-    version: master
+    version: "{{ wordpress_version }}"
 - name: Make my directory tree readable
   file:
     path: /home/ubuntu/wp

@@ -1,0 +1,20 @@
+---
+
+- name: Removes mysql container
+  docker_container:
+    name: my_mysql
+    image: mysql/mysql-server
+    state: absent
+
+- name: Create mysql container
+  docker_container:
+    name: my_mysql
+    image: mysql/mysql-server
+    state: started
+    env:
+      MYSQL_DATABASE: wordpress
+      MYSQL_USER: wordpress_user
+      MYSQL_PASSWORD: wordpress_password
+      MYSQL_RANDOM_ROOT_PASSWORD: yes
+    ports:
+      - "3306:3306"

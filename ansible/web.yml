@@ -1,11 +1,10 @@
 ---
 # This playbook setup test environment
 
-- name: apply common configuration to all nodes
+- name: apply configuration to all web nodes
   hosts: all
   become: true
   roles:
     - docker
     - git
     - docker_wordpress
-    #- common

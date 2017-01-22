@@ -1,8 +1,10 @@
 ---
-# This playbook setup test environment with docker and nginx
+# This playbook setup test environment
 
 - name: apply common configuration to all nodes
   hosts: all
-
+  become: true
   roles:
-    - common
+    - docker
+    - docker_wordpress
+    #- common

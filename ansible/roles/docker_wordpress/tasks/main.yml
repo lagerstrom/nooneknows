@@ -1,0 +1,13 @@
+---
+
+- name: Create wordpress container
+  docker_container:
+    name: my_wordpress
+    image: wordpress
+    state: started
+    env:
+      WORDPRESS_DB_HOST: tf-005c715f15581c9e87833ce7e1.csf4ufsla56o.eu-west-1.rds.amazonaws.com
+      WORDPRESS_DB_USER: test_user
+      WORDPRESS_DB_PASSWORD: testingpassword
+    ports:
+      - "80:80"

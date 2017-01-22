@@ -54,7 +54,7 @@ function install_terraform {
     echo -n -e "$RESET_TEXT"
 
     execute_command wget $TERRAFORM_ZIP -O terraform_amd64.zip
-    execute command unzip terraform_amd64.zip
+    execute_command unzip terraform_amd64.zip
     execute_command rm terraform_amd64.zip
 
     echo -n -e "$GREEN_TEXT"

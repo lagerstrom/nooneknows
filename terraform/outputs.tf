@@ -3,10 +3,13 @@ output "address" {
 }
 
 output "webs" {
-  #value = "${aws_instance.web.public_ip}"
   value = "${join(",", aws_instance.web.*.public_ip)}"
 }
 
-output "db" {
-  value = "${aws_db_instance.default.address}"
+output "db_pub" {
+  value = "${aws_instance.db.public_ip}"
+}
+
+output "db_priv" {
+  value = "${aws_instance.db.private_ip}"
 }

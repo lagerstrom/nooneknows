@@ -56,6 +56,14 @@ resource "aws_security_group" "db" {
   description = "Used for the database"
   vpc_id      = "${aws_vpc.default.id}"
 
+  # SSH access from anywhere
+  ingress {
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
   # MySQL access from the VPC
   ingress {
     from_port   = 3306
@@ -186,48 +194,41 @@ resource "aws_instance" "web" {
 }
 
 
+resource "aws_instance" "db" {
+  # The connection block tells our provisioner how to
+  # communicate with the resource (instance)
+  connection {
+    # The default username for our AMI
+    user = "ubuntu"
 
-# Create a subnet to launch our db instances into
-resource "aws_subnet" "db1" {
-  vpc_id                  = "${aws_vpc.default.id}"
-  cidr_block              = "10.0.2.0/24"
-  map_public_ip_on_launch = false
-  #availability_zone       = "eu-west-1a"
-  availability_zone       = "${var.aws_region}a"
-}
+    # The connection will use the local SSH agent for authentication.
+  }
 
-# Create a subnet to launch our db instances into
-resource "aws_subnet" "db2" {
-  vpc_id                  = "${aws_vpc.default.id}"
-  cidr_block              = "10.0.3.0/24"
-  map_public_ip_on_launch = false
-  availability_zone       = "${var.aws_region}b"
-  #availability_zone       = "eu-west-1b"
-}
+  instance_type = "${var.instance_size}"
 
+  # Lookup the correct AMI based on the region
+  # we specified
+  ami = "${lookup(var.aws_amis, var.aws_region)}"
 
-resource "aws_db_subnet_group" "default" {
+  # The name of our SSH keypair we created above.
+  key_name = "${aws_key_pair.auth.id}"
+
+  # Our Security group to allow HTTP and SSH access
+  vpc_security_group_ids = ["${aws_security_group.db.id}"]
+
   # We're going to launch into the same subnet as our ELB. In a production
   # environment it's more common to have a separate private subnet for
   # backend instances.
-  subnet_ids = ["${aws_subnet.db1.id}", "${aws_subnet.db2.id}"]
-  name = "my_database_subnet_group"
-}
+  subnet_id = "${aws_subnet.default.id}"
 
-resource "aws_db_instance" "default" {
-  allocated_storage    = 5
-  engine               = "mysql"
-  engine_version       = "5.6.27"
-  instance_class       = "db.t1.micro"
-  name                 = "mydb"
-  username             = "test_user"
-  password             = "testingpassword"
-  multi_az             = false
+  tags {
+    Name = "database_instance"
+  }
 
-  # Our Security group to allow MySQL access
-  vpc_security_group_ids = ["${aws_security_group.db.id}"]
-
-  # Creates the db host in the same VPC as the elb and the EC2 machines
-  db_subnet_group_name = "${aws_db_subnet_group.default.id}"
-
+  # We run a remote provisioner on the instance after creating it.
+  provisioner "remote-exec" {
+    inline = [
+      "sudo apt-get -y update",
+    ]
+  }
 }

@@ -1,1 +1,1 @@
-This is a project that for building a test environment as a step in the recruitment process for a stealthy startup.
+This is a project that for building a test environment.
